@@ -9,8 +9,10 @@ import numpy as np
 
 def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: int, output_path: str):
     """
-    ฟังก์ชันแปลงข้อมูลราคาน้ำมันดิบให้ออกมาเป็นรายงาน Excel 3 ชีท 
-    โดยจัดเรียงลำดับหัวข้อประเภทน้ำมันตามเงื่อนไขที่กำหนดอย่างแม่นยำ
+    ฟังก์ชันแปลงข้อมูลราคาน้ำมันดิบให้ออกมาเป็นรายงาน Excel 3 ชีท
+    - ล็อกแถวและชื่อแบรนด์ของน้ำมัน 7 ชนิดตามลำดับที่กำหนด หากไม่มีราคาให้ใส่ 0.00
+    - น้ำมันอื่นๆ นอกเหนือจากนี้จะต่อท้ายและดึงเฉพาะแบรนด์ที่มีใน raw จริง
+    - ชีท 3 ไฮไลต์ส่วนต่างราคาเฉพาะรายวัน (แดง = เพิ่มขึ้น, เขียว = ลดลง)
     """
     # ----------------- 1. เตรียมตัวแปรวันที่และปฏิทิน -----------------
     target_dt = datetime(target_year, target_month, 1)
@@ -32,147 +34,276 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
     
     df = raw_df.copy()
     df['Date'] = pd.to_datetime(df['Date'])
-    
-    # ลำดับปั๊มมาตรฐานตามฟอร์ม
-    standard_brands = [
-        'ปตท (PTT)', 'เชลล์ (SHELL)', 'เอสโซ่ (ESSO)', 'เชฟรอน (CALTEX)', 
-        'ทีพีไอ (TPI)', 'บางจาก (BCP)', 'ภาคใต้เชื้อเพลิง (PT)', 
-        'สยามสหบริการ (SUSCO)', 'ทั่วไป', 'คอสโม (COSMO)', 
-        'เพียว (PURE)', 'ปิโตรนาส (PETRONAS)'
-    ]
 
-    # ----------------- 2. กำหนดลำดับและชื่อหัวข้อน้ำมัน -----------------
-    # กำหนด Keyword สำหรับ Match กับชื่อน้ำมันในไฟล์ดิบ และชื่อหัวข้อเป๊ะๆ ที่ต้องการแสดง
+    # ----------------- 2. กำหนดโครงสร้างน้ำมัน 7 หมวดและลิสต์ปั๊มเป๊ะๆ -----------------
     priority_oil_configs = [
         {
             "priority": 1,
             "title": "1. เบนซิน ออกเทน 95 (ULG 95 RON)  (5220003)",
-            "match": lambda name: ('เบนซิน' in name or 'ULG' in name.upper()) and ('95' in name) and ('แก๊ส' not in name and 'GAS' not in name.upper())
+            "match": lambda name: ('เบนซิน' in name or 'ULG' in name.upper()) and ('95' in name) and ('แก๊ส' not in name and 'GAS' not in name.upper()),
+            "brands": [
+                'ปตท (PTT)',
+                'เอสโซ่ (ESSO)',
+                'เซฟรอน (CALTIX)',
+                'ทีพีไอ (TPI)',
+                'ภาคใต้เชื้อเพลิง (PT)',
+                'สยามสหบริการ (SOSCO)',
+                'คอสโม (COSMO)',
+                'ปิโตนาส (PETRONAS)'
+            ]
         },
         {
             "priority": 2,
             "title": "2. ดีเซลหมุนเร็ว (HSD, 0.005%S)  (5220004)",
-            "match": lambda name: ('ดีเซล' in name or 'HSD' in name.upper()) and ('B10' not in name and 'B20' not in name and 'B7' not in name)
+            "match": lambda name: ('ดีเซล' in name or 'HSD' in name.upper()) and ('B10' not in name and 'B20' not in name and 'B7' not in name),
+            "brands": [
+                'ปตท (PTT)',
+                'เชลล์ (SHELL)',
+                'เอสโซ่ (ESSO)',
+                'เซฟรอน (CALTIX)',
+                'TPI',
+                'บางจาก (BCP)',
+                'ภาคใต้เชื้อเพลิง (PT)',
+                'สยามสหบริการ (SOSCO)',
+                'ทั่วไป',
+                'คอสโม (COSMO)',
+                'เพียว (PURE)',
+                'ปิโตนาส (PETRONAS)'
+            ]
         },
         {
             "priority": 3,
             "title": "3. แก๊สโซฮอล ออกเทน 91 (Gasohol 91-E10)  (5220006)",
-            "match": lambda name: ('91' in name) and ('แก๊ส' in name or 'GAS' in name.upper())
+            "match": lambda name: ('91' in name) and ('แก๊ส' in name or 'GAS' in name.upper()),
+            "brands": [
+                'ปตท (PTT)',
+                'บางจาก (BCP)',
+                'เชลล์ (SHELL)',
+                'เอสโซ่ (ESSO)',
+                'คอสโม (COSMO)',
+                'เซฟรอน (CALTIX)',
+                'ทั่วไป',
+                'ปิโตนาส (PETRONAS)',
+                'ภาคใต้เชื้อเพลิง (PT)',
+                'สยามสหบริการ (SOSCO)',
+                'เพียว (PURE)',
+                'TPI'
+            ]
         },
         {
             "priority": 4,
             "title": "4. แก๊สโซฮอล ออกเทน 95 (Gasohol 95-E10)  (5220007)",
-            "match": lambda name: ('95' in name) and ('แก๊ส' in name or 'GAS' in name.upper()) and ('E20' not in name.upper() and 'E85' not in name.upper())
+            "match": lambda name: ('95' in name) and ('แก๊ส' in name or 'GAS' in name.upper()) and ('E20' not in name.upper() and 'E85' not in name.upper()),
+            "brands": [
+                'ปตท (PTT)',
+                'เชลล์ (SHELL)',
+                'เอสโซ่ (ESSO)',
+                'เซฟรอน (CALTIX)',
+                'บางจาก (BCP)',
+                'สยามสหบริการ (SOSCO)',
+                'ภาคใต้เชื้อเพลิง (PT)',
+                'เพียว (PURE)',
+                'ปิโตนาส (PETRONAS)',
+                'ทั่วไป',
+                'คอสโม (COSMO)'
+            ]
         },
         {
             "priority": 5,
             "title": "5. แก๊สโซฮอล E20 เบนซินไร้สารตะกั่ว 80% + แอลกอฮอล์ 20% (Gasohol 95-E20) (5220010)",
-            "match": lambda name: 'E20' in name.upper()
+            "match": lambda name: 'E20' in name.upper(),
+            "brands": [
+                'ปตท (PTT)',
+                'บางจาก (BCP)',
+                'เซฟรอน (CALTIX)',
+                'เชลล์ (SHELL)',
+                'เอสโซ่ (ESSO)',
+                'สยามสหบริการ (SOSCO)',
+                'ภาคใต้เชื้อเพลิง (PT)'
+            ]
         },
         {
             "priority": 6,
             "title": "6. แก๊สโซฮอล E85 ออกเทน 95 (Gasohol 95-E85) (5220011)",
-            "match": lambda name: 'E85' in name.upper()
+            "match": lambda name: 'E85' in name.upper(),
+            "brands": [
+                'ปตท (PTT)',
+                'บางจาก (BCP)'
+            ]
         },
         {
             "priority": 7,
             "title": "7. ดีเซลหมุนเร็ว (B10) (HSD, 0.005%S)  (5220012)",
-            "match": lambda name: 'B10' in name.upper()
+            "match": lambda name: 'B10' in name.upper(),
+            "brands": [
+                'ปตท (PTT)',
+                'เชลล์ (SHELL)',
+                'เอสโซ่ (ESSO)',
+                'เซฟรอน (CALTIX)',
+                'บางจาก (BCP)',
+                'ภาคใต้เชื้อเพลิง (PT)',
+                'สยามสหบริการ (SOSCO)'
+            ]
         }
     ]
 
-    def match_product(prod_name):
-        for cfg in priority_oil_configs:
-            if cfg["match"](prod_name):
-                return cfg["priority"], cfg["title"]
-        return 999, prod_name
-
-    # ดึงชื่อผลิตภัณฑ์ทั้งหมดที่มีในฐานข้อมูล
-    all_raw_products = [p for p in df['Product'].dropna().unique() if str(p).strip() != '']
-    
-    # จัดกลุ่มและเรียงลำดับรายการน้ำมัน
-    sorted_products = []
-    matched_flags = {}
-    
-    for cfg in priority_oil_configs:
-        for p in all_raw_products:
-            if p not in matched_flags and cfg["match"](p):
-                sorted_products.append((p, cfg["title"], cfg["priority"]))
-                matched_flags[p] = True
+    # ฟังก์ชันช่วยจับคู่ชื่อปั๊มใน raw data กับชื่อที่ต้องการแสดง
+    def match_brand_key(target_brand, raw_brands):
+        t = target_brand.upper().replace(' ', '')
+        # Map เฉพาะคำสำคัญ
+        keywords = {
+            'PTT': 'PTT', 'ปตท': 'PTT',
+            'SHELL': 'SHELL', 'เชลล์': 'SHELL',
+            'ESSO': 'ESSO', 'เอสโซ่': 'ESSO',
+            'CALTIX': 'CALT', 'CALTEX': 'CALT', 'เซฟรอน': 'CALT', 'เชฟรอน': 'CALT',
+            'TPI': 'TPI', 'ทีพีไอ': 'TPI',
+            'BCP': 'BCP', 'บางจาก': 'BCP',
+            'PT': 'PT', 'ภาคใต้': 'PT',
+            'SOSCO': 'S', 'SUSCO': 'S', 'สยามสห': 'S',
+            'COSMO': 'COSMO', 'คอสโม': 'COSMO',
+            'PURE': 'PURE', 'เพียว': 'PURE',
+            'PETRONAS': 'PETRONAS', 'ปิโตนาส': 'PETRONAS', 'ปิโตรนาส': 'PETRONAS',
+            'ทั่วไป': 'ทั่วไป'
+        }
+        
+        target_token = None
+        for k, v in keywords.items():
+            if k in t:
+                target_token = v
                 break
                 
-    # นำน้ำมันประเภทอื่นๆ ที่เหลือมาต่อท้าย
-    other_priority = 8
+        if not target_token:
+            return target_brand if target_brand in raw_brands else None
+
+        for rb in raw_brands:
+            rb_clean = str(rb).upper().replace(' ', '')
+            for k, v in keywords.items():
+                if k in rb_clean and v == target_token:
+                    return rb
+        return None
+
+    # จัดการรายชื่อผลิตภัณฑ์
+    all_raw_products = [p for p in df['Product'].dropna().unique() if str(p).strip() != '']
+    sorted_sections = []
+    matched_raw_prods = set()
+
+    for cfg in priority_oil_configs:
+        matched_prod = None
+        for p in all_raw_products:
+            if p not in matched_raw_prods and cfg["match"](p):
+                matched_prod = p
+                matched_raw_prods.add(p)
+                break
+        sorted_sections.append({
+            'raw_product': matched_prod,
+            'title': cfg['title'],
+            'fixed_brands': cfg['brands'],
+            'is_priority': True
+        })
+
+    # น้ำมันกลุ่มอื่นๆ ที่ไม่ได้อยู่ใน 7 ข้อแรก (เริ่มตั้งแต่ข้อ 8 เป็นต้นไป)
+    other_idx = 8
     for p in all_raw_products:
-        if p not in matched_flags:
-            sorted_products.append((p, f"{other_priority}. {p}", other_priority))
-            other_priority += 1
+        if p not in matched_raw_prods:
+            sorted_sections.append({
+                'raw_product': p,
+                'title': f"{other_idx}. {p}",
+                'fixed_brands': None,  # ดึงตามที่มีจริงใน raw
+                'is_priority': False
+            })
+            other_idx += 1
 
     # ----------------- 3. ฟังก์ชันเตรียมข้อมูลตาราง -----------------
     def prepare_sheet_data(price_offset=0.0):
         rows = []
         
-        for raw_prod_name, display_title, _ in sorted_products:
-            prod_df = df[df['Product'] == raw_prod_name].copy()
-            if price_offset > 0:
-                prod_df['Price'] = prod_df['Price'] + price_offset
-
-            curr_df = prod_df[(prod_df['Date'].dt.year == target_year) & (prod_df['Date'].dt.month == target_month)]
-            prev_df = prod_df[(prod_df['Date'].dt.year == prev_dt.year) & (prod_df['Date'].dt.month == prev_dt.month)]
+        for section in sorted_sections:
+            raw_prod = section['raw_product']
+            display_title = section['title']
             
-            prev_avg = prev_df[prev_df['Price'] > 0].groupby('Brand')['Price'].mean()
-            prev_last_day_val = prev_df[prev_df['Date'].dt.day == num_days_prev].set_index('Brand')['Price']
-            
-            if not curr_df.empty:
-                pivot_curr = curr_df.pivot_table(index='Brand', columns=curr_df['Date'].dt.day, values='Price', aggfunc='last')
-            else:
-                pivot_curr = pd.DataFrame()
-
-            available_brands = [b for b in standard_brands if b in prod_df['Brand'].unique()]
-            if not available_brands:
-                available_brands = list(prod_df['Brand'].unique())
-
-            # เพิ่มแถว Header หมวดหมู่ประเภทน้ำมัน
+            # ใส่ Header หมวดหมู่น้ำมัน
             rows.append({
                 'is_header': True,
                 'title': display_title,
                 'data': None
             })
             
-            for brand in available_brands:
-                r = {'Brand': brand}
-                p_avg = prev_avg.get(brand, np.nan)
-                r['avg_prev'] = p_avg
-                r['prev_31'] = prev_last_day_val.get(brand, np.nan)
+            if raw_prod is not None:
+                prod_df = df[df['Product'] == raw_prod].copy()
+                if price_offset > 0:
+                    prod_df['Price'] = prod_df['Price'] + price_offset
+
+                curr_df = prod_df[(prod_df['Date'].dt.year == target_year) & (prod_df['Date'].dt.month == target_month)]
+                prev_df = prod_df[(prod_df['Date'].dt.year == prev_dt.year) & (prod_df['Date'].dt.month == prev_dt.month)]
                 
-                valid_daily_prices = []
-                for d in range(1, 32):
-                    if d <= num_days_curr and (brand in pivot_curr.index) and (d in pivot_curr.columns):
-                        val = pivot_curr.loc[brand, d]
-                        if pd.notna(val) and val > 0:
-                            r[str(d)] = float(val)
-                            valid_daily_prices.append(float(val))
+                prev_avg = prev_df[prev_df['Price'] > 0].groupby('Brand')['Price'].mean()
+                prev_last_day_val = prev_df[prev_df['Date'].dt.day == num_days_prev].set_index('Brand')['Price']
+                
+                if not curr_df.empty:
+                    pivot_curr = curr_df.pivot_table(index='Brand', columns=curr_df['Date'].dt.day, values='Price', aggfunc='last')
+                else:
+                    pivot_curr = pd.DataFrame()
+                raw_brands_in_prod = list(prod_df['Brand'].dropna().unique())
+            else:
+                curr_df = pd.DataFrame()
+                prev_avg = pd.Series(dtype=float)
+                prev_last_day_val = pd.Series(dtype=float)
+                pivot_curr = pd.DataFrame()
+                raw_brands_in_prod = []
+
+            # กำหนดรายชื่อแบรนด์ที่จะแสดงในหมวดนี้
+            if section['is_priority']:
+                display_brands = [(b, match_brand_key(b, raw_brands_in_prod)) for b in section['fixed_brands']]
+            else:
+                display_brands = [(b, b) for b in raw_brands_in_prod]
+
+            for display_b_name, actual_raw_b in display_brands:
+                r = {'Brand': display_b_name}
+                
+                if actual_raw_b is not None:
+                    p_avg = prev_avg.get(actual_raw_b, np.nan)
+                    r['avg_prev'] = p_avg if (pd.notna(p_avg) and p_avg > 0) else 0.00
+                    
+                    p_31 = prev_last_day_val.get(actual_raw_b, np.nan)
+                    r['prev_31'] = p_31 if (pd.notna(p_31) and p_31 > 0) else 0.00
+                    
+                    valid_daily_prices = []
+                    for d in range(1, 32):
+                        if d <= num_days_curr and (actual_raw_b in pivot_curr.index) and (d in pivot_curr.columns):
+                            val = pivot_curr.loc[actual_raw_b, d]
+                            if pd.notna(val) and val > 0:
+                                r[str(d)] = float(val)
+                                valid_daily_prices.append(float(val))
+                            else:
+                                r[str(d)] = 0.00
                         else:
                             r[str(d)] = 0.00
-                    else:
-                        r[str(d)] = 0.00
-                
-                c_avg = np.mean(valid_daily_prices) if valid_daily_prices else 0.00
-                r['avg_curr'] = c_avg
-                
-                if pd.notna(p_avg) and p_avg > 0 and c_avg > 0:
-                    r['REL'] = (c_avg / p_avg) * 100.0
-                else:
-                    r['REL'] = 0.00
+                            
+                    c_avg = np.mean(valid_daily_prices) if valid_daily_prices else 0.00
+                    r['avg_curr'] = c_avg
                     
+                    if r['avg_prev'] > 0 and c_avg > 0:
+                        r['REL'] = (c_avg / r['avg_prev']) * 100.0
+                    else:
+                        r['REL'] = 0.00
+                else:
+                    # กรณีไม่มีข้อมูลใน Raw ใส่ 0.00 ทั้งแถว
+                    r['avg_prev'] = 0.00
+                    r['prev_31'] = 0.00
+                    for d in range(1, 32):
+                        r[str(d)] = 0.00
+                    r['avg_curr'] = 0.00
+                    r['REL'] = 0.00
+                
                 rows.append({
                     'is_header': False,
                     'title': '',
                     'data': r
                 })
+                
         return rows
 
-    # ----------------- 4. จัดรูปแบบและสร้างไฟล์ Excel -----------------
+    # ----------------- 4. สร้างและจัดสไตล์ไฟล์ Excel -----------------
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
     
@@ -183,6 +314,11 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
     fill_blue_header = PatternFill(start_color="BDD7EE", end_color="BDD7EE", fill_type="solid")
     fill_sub_green = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
     fill_yellow = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+
+    fill_diff_up = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
+    font_diff_up = Font(name='Angsana New', size=12, color="C00000", bold=True)
+    fill_diff_down = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+    font_diff_down = Font(name='Angsana New', size=12, color="375623", bold=True)
     
     thin_border = Border(
         left=Side(style='thin', color='A6A6A6'),
@@ -271,7 +407,7 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
                 
                 current_row += 1
 
-    # 4.2 Sheet 3 (ผลต่างราคารายวันเทียบวันก่อนหน้า)
+    # 4.2 Sheet 3 (ผลต่างราคารายวันเทียบวันก่อนหน้า พร้อมไฮไลต์ แดง/เขียว)
     ws3 = wb.create_sheet(title='ผลต่างราคารายวัน')
     ws3.cell(row=1, column=1, value=f"{title_text} (ส่วนต่างราคาเทียบวันก่อนหน้า)").font = font_title
     
@@ -306,14 +442,16 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
             b_cell.alignment = align_left
             b_cell.border = thin_border
             
-            ws3.cell(row=current_row, column=2, value=0.00).number_format = '0.00'
-            ws3.cell(row=current_row, column=2).fill = fill_sub_green
-            ws3.cell(row=current_row, column=2).border = thin_border
-            ws3.cell(row=current_row, column=2).alignment = align_right
+            cell_prev31 = ws3.cell(row=current_row, column=2, value=0.00)
+            cell_prev31.number_format = '0.00'
+            cell_prev31.fill = fill_sub_green
+            cell_prev31.border = thin_border
+            cell_prev31.alignment = align_right
             
             diff_values = []
-            prev_price = d['prev_31'] if pd.notna(d['prev_31']) else 0.00
+            prev_price = d['prev_31'] if (pd.notna(d['prev_31']) and d['prev_31'] > 0) else 0.00
             
+            # คำนวณความต่างรายวัน (คอลัมน์ Index 3 ถึง 33)
             for idx, day_str in enumerate(days_cols, 3):
                 curr_price = d[day_str]
                 
@@ -325,9 +463,18 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
                 
                 cell_diff = ws3.cell(row=current_row, column=idx, value=diff)
                 cell_diff.number_format = '0.00'
-                cell_diff.font = font_regular
                 cell_diff.alignment = align_right
                 cell_diff.border = thin_border
+                
+                # ไฮไลต์ แดง = เพิ่ม, เขียว = ลด เฉพาะช่องรายวัน
+                if diff > 0:
+                    cell_diff.fill = fill_diff_up
+                    cell_diff.font = font_diff_up
+                elif diff < 0:
+                    cell_diff.fill = fill_diff_down
+                    cell_diff.font = font_diff_down
+                else:
+                    cell_diff.font = font_regular
                 
                 if curr_price > 0:
                     prev_price = curr_price
@@ -342,11 +489,11 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
             
             current_row += 1
 
-    # ปรับขนาดความกว้างคอลัมน์
+    # กำหนดความกว้างคอลัมน์
     for sheet in wb.worksheets:
         sheet.column_dimensions['A'].width = 24
         for col_letter in [get_column_letter(c) for c in range(2, sheet.max_column + 1)]:
             sheet.column_dimensions[col_letter].width = 7.5
 
     wb.save(output_path)
-    print(f"บันทึกไฟล์รายงานสำเร็จเรียบร้อยที่: {output_path}")
+    print(f"สร้างไฟล์รายงานพร้อมล็อกแถวสำเร็จเรียบร้อยที่: {output_path}")
