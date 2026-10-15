@@ -109,6 +109,22 @@ if st.sidebar.button("🧹 ล้างแคชและรีเฟรชห�
     st.cache_data.clear()
     st.rerun()
 
+# ------------------ ปุ่มดาวน์โหลดไฟล์ Raw Data บน Sidebar ------------------
+st.sidebar.write("---")
+st.sidebar.subheader("📥 ดาวน์โหลดฐานข้อมูลดิบ (Raw Data)")
+st.sidebar.caption("ไฟล์ Excel ข้อมูลดิบทั้งหมดที่เก็บสะสมตั้งแต่เริ่มต้นจนถึงปัจจุบัน")
+
+if os.path.exists(raw_file):
+    with open(raw_file, "rb") as rf:
+        raw_bytes = rf.read()
+    st.sidebar.download_button(
+        label="💾 ดาวน์โหลด EPPO Raw Data (.xlsx)",
+        data=raw_bytes,
+        file_name="EPPO_Historical_Prices_Merged.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
 # ------------------ 6. ฟอร์มเลือกเดือนและปีสำหรับออกรายงาน ------------------
 month_names_th = {
     1: "มกราคม", 2: "กุมภาพันธ์", 3: "มีนาคม", 4: "เมษายน",
