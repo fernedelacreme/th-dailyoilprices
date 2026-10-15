@@ -10,11 +10,10 @@ import numpy as np
 def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: int, output_path: str):
     """
     ฟังก์ชันแปลงข้อมูลราคาน้ำมันดิบให้ออกมาเป็นรายงาน Excel 3 ชีท
-    - ล็อกแถวและชื่อแบรนด์ของน้ำมัน 7 ชนิดตามลำดับที่กำหนด พร้อมระบบ Fallback แหล่งราคา
+    - 7 หมวดหลักแสดงสถานีบริการตามลิสต์เป๊ะๆ พร้อมกลไก Proxy/Fallback แหล่งราคา
     - หมวดอื่นๆ แสดงต่อท้ายด้านล่าง และใส่ครบทุกสถานีบริการที่มีในไฟล์ raw
     - ช่องที่ไม่มีราคาให้ใส่ 0.00
     - ชีท 3 ไฮไลต์ส่วนต่างรายวัน แดง = เพิ่มขึ้น, เขียว = ลดลง
-    - Freeze First Row (หรือส่วน Header) ทุกชีท
     """
     # ----------------- 1. เตรียมตัวแปรวันที่และปฏิทิน -----------------
     target_dt = datetime(target_year, target_month, 1)
@@ -149,17 +148,23 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
         }
     ]
 
+    # ฟังก์ชันค้นหาแบรนด์ในไฟล์ Raw ตามลำดับความสำคัญ (รวม Proxy/Fallback)
     def resolve_raw_brand(target_brand, available_raw_brands):
         t_clean = target_brand.upper().replace(' ', '')
         
+        # ลำดับรายการค้นหา (Priority Search Candidate Keys)
         candidates = []
         if 'CALTEX' in t_clean or 'เซฟรอน' in t_clean or 'CHEVRON' in t_clean:
+            # เซฟรอน (CALTEX) = chevron
             candidates = ['CALTEX', 'CHEVRON', 'เซฟรอน', 'เชฟรอน']
         elif t_clean in ['TPI', 'ทีพีไอ', 'ทีพีไอ(TPI)', 'ทั่วไป']:
+            # ปตท (PTT) = TPI, ทั่วไป
             candidates = [t_clean, 'PTT', 'ปตท']
         elif 'ภาคใต้' in t_clean or t_clean == 'PT' or 'คอสโม' in t_clean or 'COSMO' in t_clean:
+            # เอ็นเนอยี = ภาคใต้เชื้อเพลิง (PT), คอสโม (COSMO)
             candidates = [t_clean, 'เอ็นเนอยี', 'ENERGY', 'PTG']
         elif 'ปิโตนาส' in t_clean or 'PETRONAS' in t_clean or 'สยามสห' in t_clean or 'SUSCO' in t_clean or 'SOSCO' in t_clean:
+            # SUSCO = ปิโตนาส (PETRONAS), สยามสหบริการ (SUSCO)
             candidates = [t_clean, 'SUSCO', 'สยามสหบริการ', 'สยามสห', 'SOSCO']
         elif 'ปตท' in t_clean or 'PTT' in t_clean:
             candidates = ['PTT', 'ปตท']
@@ -182,6 +187,7 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
                     return rb
         return None
 
+    # จัดกลุ่มหมวดหมู่ผลิตภัณฑ์
     all_raw_products = [p for p in df['Product'].dropna().unique() if str(p).strip() != '']
     sorted_sections = []
     matched_raw_prods = set()
@@ -200,13 +206,14 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
             'is_priority': True
         })
 
+    # หมวดหมู่น้ำมันอื่นๆ ที่นอกเหนือจาก 7 ข้อแรก (เรียงต่อท้าย และใส่ทุกสถานีบริการที่มีใน raw)
     other_idx = 8
     for p in all_raw_products:
         if p not in matched_raw_prods:
             sorted_sections.append({
                 'raw_product': p,
                 'title': f"{other_idx}. {p}",
-                'fixed_brands': None,
+                'fixed_brands': None,  # None = เอาทุกสถานีบริการที่มีใน raw
                 'is_priority': False
             })
             other_idx += 1
@@ -248,9 +255,12 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
                 pivot_curr = pd.DataFrame()
                 raw_brands_in_prod = []
 
+            # กำหนดรายชื่อสถานีบริการ
             if section['is_priority']:
+                # 7 ข้อแรก: ล็อกตามลิสต์ที่กำหนด พร้อมทำ Fallback Lookup
                 display_brands = [(b, resolve_raw_brand(b, raw_brands_in_prod)) for b in section['fixed_brands']]
             else:
+                # ข้ออื่นๆ: แสดงครบทุกสถานีบริการที่มีในไฟล์ raw
                 display_brands = [(b, b) for b in raw_brands_in_prod]
 
             for display_b_name, actual_raw_b in display_brands:
@@ -283,6 +293,7 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
                     else:
                         r['REL'] = 0.00
                 else:
+                    # ถ้าหาไม่เจอให้ใส่ 0.00 ทั้งแถว
                     r['avg_prev'] = 0.00
                     r['prev_31'] = 0.00
                     for d in range(1, 32):
@@ -482,18 +493,11 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
             
             current_row += 1
 
-    # ----------------- 5. ตั้งค่า Freeze Panes และความกว้างคอลัมน์ -----------------
+    # ปรับขนาดความกว้างคอลัมน์
     for sheet in wb.worksheets:
-        # Freeze แถวแรก (แถวที่ 1 อยู่กับที่ขณะเลื่อน)
-        sheet.freeze_panes = 'A2'
-        
-        # หมายเหตุ: หากต้องการให้ค้างแถว Header รายวัน (แถว 1-3) ให้อยู่กับที่เวลาเลื่อนลงดูน้ำมันแถวล่างๆ
-        # สามารถเปลี่ยนเป็น: sheet.freeze_panes = 'A4'
-        
-        # ปรับขนาดความกว้างคอลัมน์
         sheet.column_dimensions['A'].width = 24
         for col_letter in [get_column_letter(c) for c in range(2, sheet.max_column + 1)]:
             sheet.column_dimensions[col_letter].width = 7.5
 
     wb.save(output_path)
-    print(f"สร้างไฟล์รายงานพร้อม Freeze Panes เรียบร้อยแล้ว: {output_path}")
+    print(f"สร้างไฟล์รายงานพร้อมระบบ Fallback Mapping เรียบร้อยแล้ว: {output_path}")
