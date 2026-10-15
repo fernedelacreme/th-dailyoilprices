@@ -250,5 +250,5 @@ if st.session_state.generated_report is not None:
             use_container_width=True
         )
 
-            except Exception as e:
-                st.error(f"❌ เกิดข้อผิดพลาดระหว่างการสร้างรายงาน: {e}")
+    except Exception as e:
+        st.error(f"❌ เกิดข้อผิดพลาดระหว่างการสร้างรายงาน: {e}")
