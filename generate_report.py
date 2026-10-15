@@ -10,9 +10,11 @@ import numpy as np
 def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: int, output_path: str):
     """
     ฟังก์ชันแปลงข้อมูลราคาน้ำมันดิบให้ออกมาเป็นรายงาน Excel 3 ชีท
-    - ล็อกแถวและชื่อแบรนด์ของน้ำมัน 7 ชนิดตามลำดับที่กำหนด หากไม่มีราคาให้ใส่ 0.00
-    - น้ำมันอื่นๆ นอกเหนือจากนี้จะต่อท้ายและดึงเฉพาะแบรนด์ที่มีใน raw จริง
-    - ชีท 3 ไฮไลต์ส่วนต่างราคาเฉพาะรายวัน (แดง = เพิ่มขึ้น, เขียว = ลดลง)
+    - ล็อกแถวและชื่อแบรนด์ของน้ำมัน 7 ชนิดตามลำดับที่กำหนด พร้อมระบบ Fallback แหล่งราคา
+    - หมวดอื่นๆ แสดงต่อท้ายด้านล่าง และใส่ครบทุกสถานีบริการที่มีในไฟล์ raw
+    - ช่องที่ไม่มีราคาให้ใส่ 0.00
+    - ชีท 3 ไฮไลต์ส่วนต่างรายวัน แดง = เพิ่มขึ้น, เขียว = ลดลง
+    - Freeze First Row (หรือส่วน Header) ทุกชีท
     """
     # ----------------- 1. เตรียมตัวแปรวันที่และปฏิทิน -----------------
     target_dt = datetime(target_year, target_month, 1)
@@ -35,7 +37,7 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
     df = raw_df.copy()
     df['Date'] = pd.to_datetime(df['Date'])
 
-    # ----------------- 2. กำหนดโครงสร้างน้ำมัน 7 หมวดและลิสต์ปั๊มเป๊ะๆ -----------------
+    # ----------------- 2. กำหนดโครงสร้าง 7 หมวดหลักและลิสต์สถานีบริการ -----------------
     priority_oil_configs = [
         {
             "priority": 1,
@@ -44,10 +46,10 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
             "brands": [
                 'ปตท (PTT)',
                 'เอสโซ่ (ESSO)',
-                'เซฟรอน (CALTIX)',
+                'เซฟรอน (CALTEX)',
                 'ทีพีไอ (TPI)',
                 'ภาคใต้เชื้อเพลิง (PT)',
-                'สยามสหบริการ (SOSCO)',
+                'สยามสหบริการ (SUSCO)',
                 'คอสโม (COSMO)',
                 'ปิโตนาส (PETRONAS)'
             ]
@@ -60,11 +62,11 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
                 'ปตท (PTT)',
                 'เชลล์ (SHELL)',
                 'เอสโซ่ (ESSO)',
-                'เซฟรอน (CALTIX)',
+                'เซฟรอน (CALTEX)',
                 'TPI',
                 'บางจาก (BCP)',
                 'ภาคใต้เชื้อเพลิง (PT)',
-                'สยามสหบริการ (SOSCO)',
+                'สยามสหบริการ (SUSCO)',
                 'ทั่วไป',
                 'คอสโม (COSMO)',
                 'เพียว (PURE)',
@@ -81,11 +83,11 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
                 'เชลล์ (SHELL)',
                 'เอสโซ่ (ESSO)',
                 'คอสโม (COSMO)',
-                'เซฟรอน (CALTIX)',
+                'เซฟรอน (CALTEX)',
                 'ทั่วไป',
                 'ปิโตนาส (PETRONAS)',
                 'ภาคใต้เชื้อเพลิง (PT)',
-                'สยามสหบริการ (SOSCO)',
+                'สยามสหบริการ (SUSCO)',
                 'เพียว (PURE)',
                 'TPI'
             ]
@@ -98,9 +100,9 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
                 'ปตท (PTT)',
                 'เชลล์ (SHELL)',
                 'เอสโซ่ (ESSO)',
-                'เซฟรอน (CALTIX)',
+                'เซฟรอน (CALTEX)',
                 'บางจาก (BCP)',
-                'สยามสหบริการ (SOSCO)',
+                'สยามสหบริการ (SUSCO)',
                 'ภาคใต้เชื้อเพลิง (PT)',
                 'เพียว (PURE)',
                 'ปิโตนาส (PETRONAS)',
@@ -115,10 +117,10 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
             "brands": [
                 'ปตท (PTT)',
                 'บางจาก (BCP)',
-                'เซฟรอน (CALTIX)',
+                'เซฟรอน (CALTEX)',
                 'เชลล์ (SHELL)',
                 'เอสโซ่ (ESSO)',
-                'สยามสหบริการ (SOSCO)',
+                'สยามสหบริการ (SUSCO)',
                 'ภาคใต้เชื้อเพลิง (PT)'
             ]
         },
@@ -139,50 +141,47 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
                 'ปตท (PTT)',
                 'เชลล์ (SHELL)',
                 'เอสโซ่ (ESSO)',
-                'เซฟรอน (CALTIX)',
+                'เซฟรอน (CALTEX)',
                 'บางจาก (BCP)',
                 'ภาคใต้เชื้อเพลิง (PT)',
-                'สยามสหบริการ (SOSCO)'
+                'สยามสหบริการ (SUSCO)'
             ]
         }
     ]
 
-    # ฟังก์ชันช่วยจับคู่ชื่อปั๊มใน raw data กับชื่อที่ต้องการแสดง
-    def match_brand_key(target_brand, raw_brands):
-        t = target_brand.upper().replace(' ', '')
-        # Map เฉพาะคำสำคัญ
-        keywords = {
-            'PTT': 'PTT', 'ปตท': 'PTT',
-            'SHELL': 'SHELL', 'เชลล์': 'SHELL',
-            'ESSO': 'ESSO', 'เอสโซ่': 'ESSO',
-            'CALTIX': 'CALT', 'CALTEX': 'CALT', 'เซฟรอน': 'CALT', 'เชฟรอน': 'CALT',
-            'TPI': 'TPI', 'ทีพีไอ': 'TPI',
-            'BCP': 'BCP', 'บางจาก': 'BCP',
-            'PT': 'PT', 'ภาคใต้': 'PT',
-            'SOSCO': 'S', 'SUSCO': 'S', 'สยามสห': 'S',
-            'COSMO': 'COSMO', 'คอสโม': 'COSMO',
-            'PURE': 'PURE', 'เพียว': 'PURE',
-            'PETRONAS': 'PETRONAS', 'ปิโตนาส': 'PETRONAS', 'ปิโตรนาส': 'PETRONAS',
-            'ทั่วไป': 'ทั่วไป'
-        }
+    def resolve_raw_brand(target_brand, available_raw_brands):
+        t_clean = target_brand.upper().replace(' ', '')
         
-        target_token = None
-        for k, v in keywords.items():
-            if k in t:
-                target_token = v
-                break
-                
-        if not target_token:
-            return target_brand if target_brand in raw_brands else None
+        candidates = []
+        if 'CALTEX' in t_clean or 'เซฟรอน' in t_clean or 'CHEVRON' in t_clean:
+            candidates = ['CALTEX', 'CHEVRON', 'เซฟรอน', 'เชฟรอน']
+        elif t_clean in ['TPI', 'ทีพีไอ', 'ทีพีไอ(TPI)', 'ทั่วไป']:
+            candidates = [t_clean, 'PTT', 'ปตท']
+        elif 'ภาคใต้' in t_clean or t_clean == 'PT' or 'คอสโม' in t_clean or 'COSMO' in t_clean:
+            candidates = [t_clean, 'เอ็นเนอยี', 'ENERGY', 'PTG']
+        elif 'ปิโตนาส' in t_clean or 'PETRONAS' in t_clean or 'สยามสห' in t_clean or 'SUSCO' in t_clean or 'SOSCO' in t_clean:
+            candidates = [t_clean, 'SUSCO', 'สยามสหบริการ', 'สยามสห', 'SOSCO']
+        elif 'ปตท' in t_clean or 'PTT' in t_clean:
+            candidates = ['PTT', 'ปตท']
+        elif 'เชลล์' in t_clean or 'SHELL' in t_clean:
+            candidates = ['SHELL', 'เชลล์']
+        elif 'เอสโซ่' in t_clean or 'ESSO' in t_clean:
+            candidates = ['ESSO', 'เอสโซ่']
+        elif 'บางจาก' in t_clean or 'BCP' in t_clean:
+            candidates = ['BCP', 'บางจาก']
+        elif 'เพียว' in t_clean or 'PURE' in t_clean:
+            candidates = ['PURE', 'เพียว']
+        else:
+            candidates = [t_clean]
 
-        for rb in raw_brands:
-            rb_clean = str(rb).upper().replace(' ', '')
-            for k, v in keywords.items():
-                if k in rb_clean and v == target_token:
+        for cand in candidates:
+            cand_upper = cand.upper().replace(' ', '')
+            for rb in available_raw_brands:
+                rb_upper = str(rb).upper().replace(' ', '')
+                if cand_upper in rb_upper or rb_upper in cand_upper:
                     return rb
         return None
 
-    # จัดการรายชื่อผลิตภัณฑ์
     all_raw_products = [p for p in df['Product'].dropna().unique() if str(p).strip() != '']
     sorted_sections = []
     matched_raw_prods = set()
@@ -201,14 +200,13 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
             'is_priority': True
         })
 
-    # น้ำมันกลุ่มอื่นๆ ที่ไม่ได้อยู่ใน 7 ข้อแรก (เริ่มตั้งแต่ข้อ 8 เป็นต้นไป)
     other_idx = 8
     for p in all_raw_products:
         if p not in matched_raw_prods:
             sorted_sections.append({
                 'raw_product': p,
                 'title': f"{other_idx}. {p}",
-                'fixed_brands': None,  # ดึงตามที่มีจริงใน raw
+                'fixed_brands': None,
                 'is_priority': False
             })
             other_idx += 1
@@ -221,7 +219,6 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
             raw_prod = section['raw_product']
             display_title = section['title']
             
-            # ใส่ Header หมวดหมู่น้ำมัน
             rows.append({
                 'is_header': True,
                 'title': display_title,
@@ -251,9 +248,8 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
                 pivot_curr = pd.DataFrame()
                 raw_brands_in_prod = []
 
-            # กำหนดรายชื่อแบรนด์ที่จะแสดงในหมวดนี้
             if section['is_priority']:
-                display_brands = [(b, match_brand_key(b, raw_brands_in_prod)) for b in section['fixed_brands']]
+                display_brands = [(b, resolve_raw_brand(b, raw_brands_in_prod)) for b in section['fixed_brands']]
             else:
                 display_brands = [(b, b) for b in raw_brands_in_prod]
 
@@ -287,7 +283,6 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
                     else:
                         r['REL'] = 0.00
                 else:
-                    # กรณีไม่มีข้อมูลใน Raw ใส่ 0.00 ทั้งแถว
                     r['avg_prev'] = 0.00
                     r['prev_31'] = 0.00
                     for d in range(1, 32):
@@ -407,7 +402,7 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
                 
                 current_row += 1
 
-    # 4.2 Sheet 3 (ผลต่างราคารายวันเทียบวันก่อนหน้า พร้อมไฮไลต์ แดง/เขียว)
+    # 4.2 Sheet 3 (ผลต่างราคารายวันเทียบวันก่อนหน้า)
     ws3 = wb.create_sheet(title='ผลต่างราคารายวัน')
     ws3.cell(row=1, column=1, value=f"{title_text} (ส่วนต่างราคาเทียบวันก่อนหน้า)").font = font_title
     
@@ -451,7 +446,6 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
             diff_values = []
             prev_price = d['prev_31'] if (pd.notna(d['prev_31']) and d['prev_31'] > 0) else 0.00
             
-            # คำนวณความต่างรายวัน (คอลัมน์ Index 3 ถึง 33)
             for idx, day_str in enumerate(days_cols, 3):
                 curr_price = d[day_str]
                 
@@ -466,7 +460,6 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
                 cell_diff.alignment = align_right
                 cell_diff.border = thin_border
                 
-                # ไฮไลต์ แดง = เพิ่ม, เขียว = ลด เฉพาะช่องรายวัน
                 if diff > 0:
                     cell_diff.fill = fill_diff_up
                     cell_diff.font = font_diff_up
@@ -489,11 +482,18 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
             
             current_row += 1
 
-    # กำหนดความกว้างคอลัมน์
+    # ----------------- 5. ตั้งค่า Freeze Panes และความกว้างคอลัมน์ -----------------
     for sheet in wb.worksheets:
+        # Freeze แถวแรก (แถวที่ 1 อยู่กับที่ขณะเลื่อน)
+        sheet.freeze_panes = 'A2'
+        
+        # หมายเหตุ: หากต้องการให้ค้างแถว Header รายวัน (แถว 1-3) ให้อยู่กับที่เวลาเลื่อนลงดูน้ำมันแถวล่างๆ
+        # สามารถเปลี่ยนเป็น: sheet.freeze_panes = 'A4'
+        
+        # ปรับขนาดความกว้างคอลัมน์
         sheet.column_dimensions['A'].width = 24
         for col_letter in [get_column_letter(c) for c in range(2, sheet.max_column + 1)]:
             sheet.column_dimensions[col_letter].width = 7.5
 
     wb.save(output_path)
-    print(f"สร้างไฟล์รายงานพร้อมล็อกแถวสำเร็จเรียบร้อยที่: {output_path}")
+    print(f"สร้างไฟล์รายงานพร้อม Freeze Panes เรียบร้อยแล้ว: {output_path}")
