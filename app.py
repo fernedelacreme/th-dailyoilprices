@@ -13,38 +13,42 @@ st.set_page_config(
 
 import streamlit as st
 
-# ------------------ ปรับแต่งสไตล์และฟอนต์ผ่าน Google Fonts ------------------
+# ------------------ ปรับแต่งสไตล์และฟอนต์ผ่าน Google Fonts (ป้องกัน Icon พัง) ------------------
 custom_font_css = """
 <style>
-    /* 1. นำเข้าฟอนต์จาก Google Fonts (ตัวอย่าง: Prompt และ Kanit) */
-    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&family=Prompt:wght@300;400;500;600&display=swap');
+    /* 1. ดึงฟอนต์ Prompt และ Kanit จาก Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600&family=Prompt:wght@300;400;500;600&display=swap');
 
-    /* 2. บังคับใช้ฟอนต์กับองค์ประกอบทั้งหมดบนหน้าเว็บ */
-    html, body, [class*="css"], [class*="st-"] {
+    /* 2. เปลี่ยนฟอนต์เฉพาะส่วนข้อความ โดยยกเว้นองค์ประกอบที่เป็น Icon */
+    html, body, p, span:not([data-testid="stIconMaterial"]):not([class*="material-symbols"]), 
+    div:not([data-testid="stIconMaterial"]):not([class*="material-symbols"]), 
+    label, input, select {
         font-family: 'Prompt', sans-serif !important;
     }
 
-    /* 3. ปรับฟอนต์ของหัวข้อ (Headings) ให้ดูเด่นและทันสมัยขึ้น */
+    /* 3. ปรับฟอนต์ของหัวข้อให้เด่นชัด */
     h1, h2, h3, h4, h5, h6 {
         font-family: 'Kanit', sans-serif !important;
         font-weight: 500 !important;
-        letter-spacing: 0.5px;
     }
 
-    /* 4. ปรับขนาดและสไตล์ของปุ่มกดให้โค้งมนดูนุ่มนวล */
-    .stButton>button {
+    /* 4. ฟอนต์ปุ่มกด (ยกเว้นไอคอนที่อยู่ในปุ่ม) */
+    .stButton > button, .stDownloadButton > button {
         font-family: 'Prompt', sans-serif !important;
         font-weight: 500;
         border-radius: 8px;
-        transition: all 0.2s ease-in-out;
     }
 
-    /* 5. ปรับฟอนต์ในเมนูดรอปดาวน์และ Sidebar */
-    .stSelectbox label, .stSidebar {
-        font-family: 'Prompt', sans-serif !important;
+    /* 5. คืนค่าฟอนต์มาตรฐานสำหรับ Icon ของ Streamlit ทั้งหมด */
+    [data-testid="stIconMaterial"], 
+    [class*="material-symbols"], 
+    i[class*="icon"], 
+    span[class*="material"] {
+        font-family: 'Material Symbols Rounded', 'Material Symbols Outlined', 'Material Icons' !important;
     }
 </style>
 """
+
 st.markdown(custom_font_css, unsafe_allow_html=True)
 
 st.title("⛽ ระบบรายงานราคาน้ำมันขายปลีกอัตโนมัติ")
