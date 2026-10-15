@@ -492,7 +492,7 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
 
     # ----------------- 5. ตั้งค่า Freeze Panes และความกว้างคอลัมน์ -----------------
     for sheet in wb.worksheets:
-        sheet.freeze_panes = 'A2'
+        sheet.freeze_panes = 'A4'
         sheet.column_dimensions['A'].width = 24
         for col_letter in [get_column_letter(c) for c in range(2, sheet.max_column + 1)]:
             sheet.column_dimensions[col_letter].width = 7.5
