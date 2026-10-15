@@ -11,6 +11,7 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
     """
     ฟังก์ชันแปลงข้อมูลราคาน้ำมันดิบให้ออกมาเป็นรายงาน Excel 3 ชีท
     - 7 หมวดหลักแสดงสถานีบริการตามลิสต์เป๊ะๆ พร้อมกลไก Proxy/Fallback แหล่งราคา
+    - หมวด 2: ดีเซลหมุนเร็ว (HSD, 0.005%S) ดึงจาก 'ดีเซลหมุนเร็ว HSD B7'
     - หมวดอื่นๆ แสดงต่อท้ายด้านล่าง และใส่ครบทุกสถานีบริการที่มีในไฟล์ raw
     - ช่องที่ไม่มีราคาให้ใส่ 0.00
     - ชีท 3 ไฮไลต์ส่วนต่างรายวัน แดง = เพิ่มขึ้น, เขียว = ลดลง
@@ -56,7 +57,8 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
         {
             "priority": 2,
             "title": "2. ดีเซลหมุนเร็ว (HSD, 0.005%S)  (5220004)",
-            "match": lambda name: ('ดีเซล' in name or 'HSD' in name.upper()) and ('B10' not in name and 'B20' not in name and 'B7' not in name),
+            # ดึงจาก ดีเซลหมุนเร็ว HSD B7
+            "match": lambda name: ('ดีเซล' in name or 'HSD' in name.upper()) and ('B7' in name.upper()),
             "brands": [
                 'ปตท (PTT)',
                 'เชลล์ (SHELL)',
@@ -152,19 +154,14 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
     def resolve_raw_brand(target_brand, available_raw_brands):
         t_clean = target_brand.upper().replace(' ', '')
         
-        # ลำดับรายการค้นหา (Priority Search Candidate Keys)
         candidates = []
         if 'CALTEX' in t_clean or 'เซฟรอน' in t_clean or 'CHEVRON' in t_clean:
-            # เซฟรอน (CALTEX) = chevron
             candidates = ['CALTEX', 'CHEVRON', 'เซฟรอน', 'เชฟรอน']
         elif t_clean in ['TPI', 'ทีพีไอ', 'ทีพีไอ(TPI)', 'ทั่วไป']:
-            # ปตท (PTT) = TPI, ทั่วไป
             candidates = [t_clean, 'PTT', 'ปตท']
         elif 'ภาคใต้' in t_clean or t_clean == 'PT' or 'คอสโม' in t_clean or 'COSMO' in t_clean:
-            # เอ็นเนอยี = ภาคใต้เชื้อเพลิง (PT), คอสโม (COSMO)
             candidates = [t_clean, 'เอ็นเนอยี', 'ENERGY', 'PTG']
         elif 'ปิโตนาส' in t_clean or 'PETRONAS' in t_clean or 'สยามสห' in t_clean or 'SUSCO' in t_clean or 'SOSCO' in t_clean:
-            # SUSCO = ปิโตนาส (PETRONAS), สยามสหบริการ (SUSCO)
             candidates = [t_clean, 'SUSCO', 'สยามสหบริการ', 'สยามสห', 'SOSCO']
         elif 'ปตท' in t_clean or 'PTT' in t_clean:
             candidates = ['PTT', 'ปตท']
@@ -493,11 +490,12 @@ def build_monthly_report(raw_df: pd.DataFrame, target_year: int, target_month: i
             
             current_row += 1
 
-    # ปรับขนาดความกว้างคอลัมน์
+    # ----------------- 5. ตั้งค่า Freeze Panes และความกว้างคอลัมน์ -----------------
     for sheet in wb.worksheets:
+        sheet.freeze_panes = 'A2'
         sheet.column_dimensions['A'].width = 24
         for col_letter in [get_column_letter(c) for c in range(2, sheet.max_column + 1)]:
             sheet.column_dimensions[col_letter].width = 7.5
 
     wb.save(output_path)
-    print(f"สร้างไฟล์รายงานพร้อมระบบ Fallback Mapping เรียบร้อยแล้ว: {output_path}")
+    print(f"สร้างไฟล์รายงานสำเร็จเรียบร้อยที่: {output_path}")
