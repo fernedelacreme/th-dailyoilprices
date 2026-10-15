@@ -11,6 +11,42 @@ st.set_page_config(
     layout="wide"
 )
 
+import streamlit as st
+
+# ------------------ ปรับแต่งสไตล์และฟอนต์ผ่าน Google Fonts ------------------
+custom_font_css = """
+<style>
+    /* 1. นำเข้าฟอนต์จาก Google Fonts (ตัวอย่าง: Prompt และ Kanit) */
+    @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&family=Prompt:wght@300;400;500;600&display=swap');
+
+    /* 2. บังคับใช้ฟอนต์กับองค์ประกอบทั้งหมดบนหน้าเว็บ */
+    html, body, [class*="css"], [class*="st-"] {
+        font-family: 'Prompt', sans-serif !important;
+    }
+
+    /* 3. ปรับฟอนต์ของหัวข้อ (Headings) ให้ดูเด่นและทันสมัยขึ้น */
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Kanit', sans-serif !important;
+        font-weight: 500 !important;
+        letter-spacing: 0.5px;
+    }
+
+    /* 4. ปรับขนาดและสไตล์ของปุ่มกดให้โค้งมนดูนุ่มนวล */
+    .stButton>button {
+        font-family: 'Prompt', sans-serif !important;
+        font-weight: 500;
+        border-radius: 8px;
+        transition: all 0.2s ease-in-out;
+    }
+
+    /* 5. ปรับฟอนต์ในเมนูดรอปดาวน์และ Sidebar */
+    .stSelectbox label, .stSidebar {
+        font-family: 'Prompt', sans-serif !important;
+    }
+</style>
+"""
+st.markdown(custom_font_css, unsafe_allow_html=True)
+
 st.title("⛽ ระบบรายงานราคาน้ำมันขายปลีกอัตโนมัติ")
 st.markdown(
     """
