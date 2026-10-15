@@ -2,11 +2,9 @@ name: Daily EPPO Scraper
 
 on:
   schedule:
-    # รันทุกวันเวลา 09:00 น. เวลาไทย (UTC 02:00)
     - cron: '0 2 * * *'
-  workflow_dispatch: # เพิ่มปุ่มกดสั่งรันด้วยตนเองบนหน้าเว็บ GitHub
+  workflow_dispatch:
 
-# กำหนดสิทธิ์ให้บอทสามารถเขียนและบันทึกไฟล์กลับเข้า Repo ได้
 permissions:
   contents: write
 
