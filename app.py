@@ -196,13 +196,18 @@ with col2:
         format_func=lambda m: f"{month_names_th.get(m, m)} (เดือน {m})"
     )
 
-# ------------------ 7. ปุ่มสร้างและดาวน์โหลดไฟล์รายงาน ------------------
+# ------------------ 7. ปุ่มสร้างและดาวน์โหลดไฟล์รายงาน (ใช้ Session State) ------------------
+# เตรียมตัวแปรใน session_state เพื่อจำสถานะ
+if "generated_report" not in st.session_state:
+    st.session_state.generated_report = None
+
 st.write("")
 if st.button("📊 ประมวลผลและสร้างไฟล์รายงาน Excel", type="primary"):
     filtered_df = df_raw[(df_raw['Date'].dt.year == selected_year) & (df_raw['Date'].dt.month == selected_month)]
     
     if filtered_df.empty:
         st.warning(f"⚠️ ไม่พบข้อมูลราคาของเดือน {month_names_th[selected_month]} {selected_year + 543} ในฐานข้อมูล")
+        st.session_state.generated_report = None
     else:
         with st.spinner("กำลังคำนวณและจัดรูปแบบตาราง Excel ทั้ง 3 ชีท..."):
             output_filename = f"รายงานราคาน้ำมัน_{selected_year}_{selected_month:02d}.xlsx"
@@ -213,20 +218,37 @@ if st.button("📊 ประมวลผลและสร้างไฟล์�
                 with open(output_filename, "rb") as f:
                     file_bytes = f.read()
 
-                st.success(f"✅ สร้างไฟล์รายงานประจำเดือน {month_names_th[selected_month]} {selected_year + 543} สำเร็จ!")
-                
-                st.download_button(
-                    label="📥 คลิกที่นี่เพื่อดาวน์โหลดไฟล์ Excel (.xlsx)",
-                    data=file_bytes,
-                    file_name=output_filename,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+                # บันทึกข้อมูลไฟล์ลง Session State
+                st.session_state.generated_report = {
+                    "bytes": file_bytes,
+                    "filename": output_filename,
+                    "month_name": month_names_th[selected_month],
+                    "year_th": selected_year + 543,
+                    "preview_df": filtered_df.sort_values(by=['Date', 'Product', 'Brand'])
+                }
 
-                with st.expander("👀 ดูตัวอย่างข้อมูลดิบเฉพาะงวดเดือนที่เลือก"):
-                    st.dataframe(
-                        filtered_df.sort_values(by=['Date', 'Product', 'Brand']),
-                        use_container_width=True
-                    )
+            except Exception as e:
+                st.error(f"❌ เกิดข้อผิดพลาดระหว่างการสร้างรายงาน: {e}")
+                st.session_state.generated_report = None
+
+# แสดงผลปุ่มดาวน์โหลดค้างไว้เสมอ หากมีไฟล์ที่สร้างเสร็จแล้วใน Session State
+if st.session_state.generated_report is not None:
+    rep = st.session_state.generated_report
+    st.success(f"✅ ไฟล์รายงานประจำเดือน {rep['month_name']} {rep['year_th']} พร้อมดาวน์โหลดแล้ว")
+    
+    st.download_button(
+        label="📥 คลิกที่นี่เพื่อดาวน์โหลดไฟล์ Excel (.xlsx)",
+        data=rep["bytes"],
+        file_name=rep["filename"],
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="btn_download_report"  # กำหนด key เพื่อความเสถียร
+    )
+
+    with st.expander("👀 ดูตัวอย่างข้อมูลดิบเฉพาะงวดเดือนที่เลือก"):
+        st.dataframe(
+            rep["preview_df"],
+            use_container_width=True
+        )
 
             except Exception as e:
                 st.error(f"❌ เกิดข้อผิดพลาดระหว่างการสร้างรายงาน: {e}")
