@@ -24,9 +24,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run Scraper
-        run: |
-          cd EPPO_OilPriceTracker
-          python scraper.py
+        run: python scraper.py
 
       - name: Commit and Push Updated Excel
         run: |
