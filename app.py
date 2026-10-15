@@ -1,4 +1,5 @@
 import os
+from io import BytesIO
 import requests
 import pandas as pd
 import streamlit as st
@@ -11,35 +12,28 @@ st.set_page_config(
     layout="wide"
 )
 
-import streamlit as st
-
 # ------------------ ปรับแต่งสไตล์และฟอนต์ผ่าน Google Fonts (ป้องกัน Icon พัง) ------------------
 custom_font_css = """
 <style>
-    /* 1. ดึงฟอนต์ Prompt และ Kanit จาก Google Fonts */
     @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600&family=Prompt:wght@300;400;500;600&display=swap');
 
-    /* 2. เปลี่ยนฟอนต์เฉพาะส่วนข้อความ โดยยกเว้นองค์ประกอบที่เป็น Icon */
     html, body, p, span:not([data-testid="stIconMaterial"]):not([class*="material-symbols"]), 
     div:not([data-testid="stIconMaterial"]):not([class*="material-symbols"]), 
     label, input, select {
         font-family: 'Prompt', sans-serif !important;
     }
 
-    /* 3. ปรับฟอนต์ของหัวข้อให้เด่นชัด */
     h1, h2, h3, h4, h5, h6 {
         font-family: 'Kanit', sans-serif !important;
         font-weight: 500 !important;
     }
 
-    /* 4. ฟอนต์ปุ่มกด (ยกเว้นไอคอนที่อยู่ในปุ่ม) */
     .stButton > button, .stDownloadButton > button {
         font-family: 'Prompt', sans-serif !important;
         font-weight: 500;
         border-radius: 8px;
     }
 
-    /* 5. คืนค่าฟอนต์มาตรฐานสำหรับ Icon ของ Streamlit ทั้งหมด */
     [data-testid="stIconMaterial"], 
     [class*="material-symbols"], 
     i[class*="icon"], 
@@ -48,7 +42,6 @@ custom_font_css = """
     }
 </style>
 """
-
 st.markdown(custom_font_css, unsafe_allow_html=True)
 
 st.title("⛽ ระบบรายงานราคาน้ำมันขายปลีกอัตโนมัติ")
@@ -57,7 +50,7 @@ st.markdown(
     ระบบแปลงข้อมูลราคาน้ำมันขายปลีกจาก EPPO จัดทำรายงาน 3 ชีท:
     1. **ราคาน้ำมันขายปลีก** (ตามแบบฟอร์มมาตรฐาน)
     2. **ราคารวมหัวจ่าย (+0.05 บาท)**
-    3. **ผลต่างราคารายวัน** (Daily Difference พร้อมคำนวณค่าเฉลี่ยส่วนต่าง AI)
+    3. **ผลต่างราคารายวัน** (Daily Difference พร้อมคำนวณค่าเฉลี่ยส่วนต่าง AI และไฮไลต์ แดง/เขียว)
     """
 )
 st.write("---")
@@ -98,7 +91,6 @@ if not os.path.exists(raw_file):
         f"⚠️ ไม่พบไฟล์ฐานข้อมูล `{raw_file}` ในระบบ\n\n"
         "กรุณารอระบบ GitHub Actions ทำการ Scrape ข้อมูลในรอบแรก หรือกดสั่งรันข้อมูลจากเมนูด้านซ้าย"
     )
-    # แสดงเมนู Trigger ในกรณีที่ยังไม่มีไฟล์
     st.sidebar.header("🔄 อัปเดตข้อมูล")
     if st.sidebar.button("🚀 สั่งดึงข้อมูลรอบแรก"):
         success, msg = trigger_github_workflow()
@@ -121,7 +113,7 @@ if df_raw.empty:
     st.warning("⚠️ ไฟล์ฐานข้อมูลว่างเปล่า ยังไม่มีรายการราคาน้ำมัน")
     st.stop()
 
-# ------------------ 5. ส่วน Sidebar (สถานะระบบ & ปุ่มสั่งอัปเดต) ------------------
+# ------------------ 5. ส่วน Sidebar (สถานะระบบ & ดาวน์โหลด Raw & ปุ่มสั่งอัปเดต) ------------------
 min_date = df_raw['Date'].min()
 max_date = df_raw['Date'].max()
 
@@ -133,6 +125,23 @@ st.sidebar.info(
     f"**จำนวนแถวทั้งหมด:** {len(df_raw):,} แถว"
 )
 
+# ปุ่มดาวน์โหลด Raw Data
+st.sidebar.write("---")
+st.sidebar.subheader("📥 ดาวน์โหลดฐานข้อมูลดิบ (Raw Data)")
+st.sidebar.caption("ไฟล์ Excel รวมราคาน้ำมันทั้งหมดที่เก็บสะสมตั้งแต่เริ่มต้นจนถึงปัจจุบัน")
+
+with open(raw_file, "rb") as rf:
+    raw_bytes = rf.read()
+
+st.sidebar.download_button(
+    label="💾 ดาวน์โหลด EPPO Raw Data (.xlsx)",
+    data=raw_bytes,
+    file_name="EPPO_Historical_Prices_Merged.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    key="btn_download_raw"
+)
+
+# ส่วน Trigger ดึงข้อมูลใหม่
 st.sidebar.write("---")
 st.sidebar.subheader("🔄 สั่งดึงข้อมูลล่าสุด")
 st.sidebar.caption("กดปุ่มนี้เพื่อส่งสัญญาณให้ GitHub Actions ดึงข้อมูลวันที่ขาดอยู่จนถึงปัจจุบันทันที")
@@ -148,22 +157,6 @@ if st.sidebar.button("🚀 อัปเดตข้อมูลเดี๋ย�
 if st.sidebar.button("🧹 ล้างแคชและรีเฟรชหน้าเว็บ"):
     st.cache_data.clear()
     st.rerun()
-
-# ------------------ ปุ่มดาวน์โหลดไฟล์ Raw Data บน Sidebar ------------------
-st.sidebar.write("---")
-st.sidebar.subheader("📥 ดาวน์โหลดฐานข้อมูลดิบ (Raw Data)")
-st.sidebar.caption("ไฟล์ Excel ข้อมูลดิบทั้งหมดที่เก็บสะสมตั้งแต่เริ่มต้นจนถึงปัจจุบัน")
-
-if os.path.exists(raw_file):
-    with open(raw_file, "rb") as rf:
-        raw_bytes = rf.read()
-    st.sidebar.download_button(
-        label="💾 ดาวน์โหลด EPPO Raw Data (.xlsx)",
-        data=raw_bytes,
-        file_name="EPPO_Historical_Prices_Merged.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
 
 # ------------------ 6. ฟอร์มเลือกเดือนและปีสำหรับออกรายงาน ------------------
 month_names_th = {
@@ -197,7 +190,6 @@ with col2:
     )
 
 # ------------------ 7. ปุ่มสร้างและดาวน์โหลดไฟล์รายงาน (ใช้ Session State) ------------------
-# เตรียมตัวแปรใน session_state เพื่อจำสถานะ
 if "generated_report" not in st.session_state:
     st.session_state.generated_report = None
 
@@ -218,7 +210,7 @@ if st.button("📊 ประมวลผลและสร้างไฟล์�
                 with open(output_filename, "rb") as f:
                     file_bytes = f.read()
 
-                # บันทึกข้อมูลไฟล์ลง Session State
+                # บันทึกข้อมูลลง Session State เพื่อไม่ให้ปุ่มดาวน์โหลดหายหลังกดคลิก
                 st.session_state.generated_report = {
                     "bytes": file_bytes,
                     "filename": output_filename,
@@ -231,7 +223,7 @@ if st.button("📊 ประมวลผลและสร้างไฟล์�
                 st.error(f"❌ เกิดข้อผิดพลาดระหว่างการสร้างรายงาน: {e}")
                 st.session_state.generated_report = None
 
-# แสดงผลปุ่มดาวน์โหลดค้างไว้เสมอ หากมีไฟล์ที่สร้างเสร็จแล้วใน Session State
+# แสดงผลปุ่มดาวน์โหลดค้างไว้เสมอ
 if st.session_state.generated_report is not None:
     rep = st.session_state.generated_report
     st.success(f"✅ ไฟล์รายงานประจำเดือน {rep['month_name']} {rep['year_th']} พร้อมดาวน์โหลดแล้ว")
@@ -241,7 +233,7 @@ if st.session_state.generated_report is not None:
         data=rep["bytes"],
         file_name=rep["filename"],
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="btn_download_report"  # กำหนด key เพื่อความเสถียร
+        key="btn_download_report"
     )
 
     with st.expander("👀 ดูตัวอย่างข้อมูลดิบเฉพาะงวดเดือนที่เลือก"):
@@ -249,6 +241,3 @@ if st.session_state.generated_report is not None:
             rep["preview_df"],
             use_container_width=True
         )
-
-    except Exception as e:
-        st.error(f"❌ เกิดข้อผิดพลาดระหว่างการสร้างรายงาน: {e}")
