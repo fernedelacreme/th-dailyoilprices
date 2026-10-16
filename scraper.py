@@ -1,4 +1,5 @@
 import os
+import time
 import random
 import urllib3
 from datetime import datetime, timedelta, timezone
@@ -55,7 +56,9 @@ def get_initial_tokens(session, url):
     """ยิง GET เพื่อดึงค่า __VIEWSTATE และ __EVENTVALIDATION จากหน้าเว็บ"""
     res = session.get(url, timeout=90)
     if res.status_code != 200:
-        raise Exception(f"ยิง GET ไม่สำเร็จ (Status Code: {res.status_code})")
+        # ปริ้นข้อความจาก ScraperAPI เพื่อดูสาเหตุที่แท้จริงของ Error 500
+        error_msg = res.text[:300].strip() if res.text else "ไม่มีข้อความตอบกลับ"
+        raise Exception(f"Status Code: {res.status_code} | Detail: {error_msg}")
     
     soup = BeautifulSoup(res.text, 'html.parser')
     vs = soup.find('input', {'name': '__VIEWSTATE'})
@@ -63,7 +66,7 @@ def get_initial_tokens(session, url):
     ev = soup.find('input', {'name': '__EVENTVALIDATION'})
     
     if not vs or not ev:
-        raise Exception("ไม่พบ ViewState หรือ EventValidation ในหน้าเว็บ (อาจถูกบล็อกหรือหน้าเว็บเปลี่ยนโครงสร้าง)")
+        raise Exception("ได้หน้าเว็บมาแต่ไม่พบ ViewState (อาจติดหน้า Captcha/Firewall)")
         
     return {
         '__VIEWSTATE': vs['value'],
@@ -80,27 +83,40 @@ with requests.Session() as session:
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'th-TH,th;q=0.9,en-US;q=0.8,en;q=0.7'
     })
+    session.verify = False
 
-    # ตั้งค่า Proxy หากมี ScraperAPI Key
+    tokens = None
+
+    # 2.1 ยิง GET แค่ครั้งเดียวก่อนเข้าลูป (พร้อมระบบลองสลับโหมด Proxy อัตโนมัติ)
     if scraper_api_key:
-        # สุ่มเลข Session เพื่อล็อกให้ GET และ POST ใช้ IP เดียวกันตลอดการทำงาน
-        session_id = random.randint(10000, 999999)
-        proxy_auth = f"scraperapi.country_code=th.session_number={session_id}:{scraper_api_key}"
-        proxies = {
-            "http": f"http://{proxy_auth}@proxy-server.scraperapi.com:8001",
-            "https": f"http://{proxy_auth}@proxy-server.scraperapi.com:8001"
-        }
-        session.proxies.update(proxies)
-        session.verify = False
-        print(f"เปิดใช้งาน ScraperAPI Proxy (Country: TH, Session ID: {session_id})")
+        proxy_modes = [
+            f"scraperapi.country_code=th.session_number={random.randint(10000, 999999)}",
+            f"scraperapi.country_code=th.premium=true.session_number={random.randint(10000, 999999)}",
+            f"scraperapi.session_number={random.randint(10000, 999999)}"
+        ]
 
-    # 2.1 ยิง GET แค่ครั้งเดียวก่อนเข้าลูป
-    try:
-        print("กำลังเชื่อมต่อหน้าเว็บ EPPO เพื่อรับค่า Session ตั้งต้น...")
-        tokens = get_initial_tokens(session, target_url)
-        print("รับค่า ViewState สำเร็จ พร้อมดึงข้อมูลรายวัน!\n")
-    except Exception as e:
-        print(f"❌ ไม่สามารถเริ่มต้นดึงข้อมูลได้: {e}")
+        for attempt, mode in enumerate(proxy_modes, 1):
+            proxy_url = f"http://{mode}:{scraper_api_key}@proxy-server.scraperapi.com:8001"
+            session.proxies.update({"http": proxy_url, "https": proxy_url})
+            
+            print(f"ครั้งที่ {attempt}: กำลังลองเชื่อมต่อด้วยโหมด [{mode}]...")
+            try:
+                tokens = get_initial_tokens(session, target_url)
+                print("✅ รับค่า ViewState สำเร็จ พร้อมดึงข้อมูลรายวัน!\n")
+                break
+            except Exception as e:
+                print(f"  ⚠️ ล้มเหลว -> {e}")
+                time.sleep(3)
+    else:
+        try:
+            print("กำลังเชื่อมต่อโดยตรง (ไม่ใช้ Proxy)...")
+            tokens = get_initial_tokens(session, target_url)
+            print("✅ รับค่า ViewState สำเร็จ พร้อมดึงข้อมูลรายวัน!\n")
+        except Exception as e:
+            print(f"  ⚠️ ล้มเหลว -> {e}")
+
+    if not tokens:
+        print("❌ ไม่สามารถเชื่อมต่อหน้าเว็บ EPPO ได้หลังจากลองทุกโหมดแล้ว")
         exit(1)
 
     # 2.2 วนลูปยิงเฉพาะ POST รายวันโดยใช้ค่า ViewState เดิม
@@ -125,7 +141,6 @@ with requests.Session() as session:
             content_type = res_post.headers.get('Content-Type', '').lower()
             if 'text/html' in content_type or len(res_post.content) < 500:
                 print(f"  -> ไม่ได้รับไฟล์ Excel (อาจยังไม่มีข้อมูลวันที่ {date_str} หรือ Session หมดอายุ) ลองรีเฟรช Token...")
-                # ลองดึง Token ใหม่อีกครั้งเผื่อกรณีรันหลายวันแล้ว Session หลุด
                 tokens = get_initial_tokens(session, target_url)
                 payload.update(tokens)
                 res_post = session.post(target_url, data=payload, timeout=90)
