@@ -1,5 +1,4 @@
 import os
-import urllib.parse
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import pandas as pd
@@ -12,13 +11,12 @@ os.makedirs(data_dir, exist_ok=True)
 
 target_url = "https://www2.eppo.go.th/epporop/entryreport/ropbydaypublic.aspx"
 
-# กำหนด Timezone เวลาไทย (UTC+7)
 tz_th = timezone(timedelta(hours=7))
 today = datetime.now(tz_th).date()
 current_year = today.year
 output_file = os.path.join(data_dir, f'EPPO_Prices_{current_year}.parquet')
 
-# ดึง ScraperAPI Key จาก Environment Variable
+# ดึง ScraperAPI Key จาก GitHub Secret
 scraper_api_key = os.environ.get("SCRAPER_API_KEY", "").strip()
 
 # ------------------ 1. ตรวจสอบข้อมูลเดิมของปีปัจจุบัน ------------------
@@ -46,16 +44,18 @@ print(f"ช่วงวันที่ต้องดึงข้อมูล: {
 date_list = pd.date_range(start=start_date, end=today).strftime('%d/%m/%Y')
 all_data = []
 
-# ฟังก์ชันช่วยสร้าง URL ตามเงื่อนไขว่าใช้ ScraperAPI หรือยิงตรง
-def get_endpoint(url):
-    if scraper_api_key:
-        encoded = urllib.parse.quote(url)
-        return f"http://api.scraperapi.com?api_key={scraper_api_key}&url={encoded}"
-    return url
-
 # ------------------ 2. ดึงข้อมูลราคาน้ำมันจาก EPPO ------------------
 with requests.Session() as session:
-    if not scraper_api_key:
+    # หากมี ScraperAPI Key ให้ตั้งค่าเป็น Standard Proxy (แก้ปัญหา Error 500)
+    if scraper_api_key:
+        proxies = {
+            "http": f"http://scraperapi:{scraper_api_key}@proxy-server.scraperapi.com:8001",
+            "https": f"http://scraperapi:{scraper_api_key}@proxy-server.scraperapi.com:8001"
+        }
+        session.proxies.update(proxies)
+        # ปิดการตรวจ Verify SSL เมื่อวิ่งผ่าน Proxy
+        session.verify = False
+    else:
         session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36'
         })
@@ -63,9 +63,8 @@ with requests.Session() as session:
     for date_str in date_list:
         print(f"กำลังดึงและแปลงข้อมูลวันที่: {date_str}")
         try:
-            # 1. ยิง GET เพื่อดึง ViewState และ Tokens
-            endpoint_get = get_endpoint(target_url)
-            res_get = session.get(endpoint_get, timeout=60)
+            # 1. ยิง GET ตรงๆ ไปที่ URL ปลายทาง (Session จะพาผ่าน ScraperAPI Proxy อัตโนมัติ)
+            res_get = session.get(target_url, timeout=90)
             
             if res_get.status_code != 200:
                 print(f"  -> ยิง GET ไม่สำเร็จ (Status Code: {res_get.status_code})")
@@ -92,10 +91,8 @@ with requests.Session() as session:
             }
 
             # 2. ยิง POST เพื่อขอไฟล์ Excel
-            endpoint_post = get_endpoint(target_url)
-            res_post = session.post(endpoint_post, data=payload, timeout=60)
+            res_post = session.post(target_url, data=payload, timeout=90)
 
-            # ตรวจสอบขนาดของ Response
             if len(res_post.content) < 500:
                 print(f"  -> ขนาดไฟล์ Excel เล็กผิดปกติ อาจยังไม่มีข้อมูลวันที่ {date_str}")
                 continue
