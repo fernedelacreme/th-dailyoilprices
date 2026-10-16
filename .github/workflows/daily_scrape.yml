@@ -25,6 +25,8 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run Scraper
+        env:
+          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
         run: python scraper.py
 
       - name: Commit and Push Updated Parquet
