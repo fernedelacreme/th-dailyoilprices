@@ -170,21 +170,22 @@ else:
 
 
 @st.cache_data
+# ปรับฟังก์ชันแปลงไฟล์ ไม่ต้องใช้แคชถาวร หรือระบุ ttl สั้นๆ เพื่อให้ได้ไฟล์สดใหม่เสมอ
 def convert_df_to_excel(df_to_export):
-  output = BytesIO()
-  with pd.ExcelWriter(
-      output, engine="openpyxl", datetime_format="DD/MM/YYYY"
-  ) as writer:
-    df_to_export.to_excel(writer, index=False)
-  return output.getvalue()
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl', datetime_format='DD/MM/YYYY') as writer:
+        df_to_export.to_excel(writer, index=False)
+    return output.getvalue()
 
+# สั่งแปลงเป็น Excel โดยตรงตาม DataFrame ก้อนล่าสุด
+excel_data = convert_df_to_excel(export_raw_df)
 
 st.sidebar.download_button(
     label=f"💾 ดาวน์โหลด {raw_filename}",
-    data=convert_df_to_excel(export_raw_df),
+    data=excel_data,
     file_name=raw_filename,
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    key="btn_download_raw",
+    key="btn_download_raw"
 )
 
 # ส่วนปุ่ม Trigger สั่งดึงข้อมูล
