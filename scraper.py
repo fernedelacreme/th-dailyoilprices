@@ -1,9 +1,14 @@
 import os
+import random
+import urllib3
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+
+# ปิดคำเตือน InsecureRequestWarning เวลาตั้งค่า verify=False กับ Proxy
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ------------------ ตั้งค่าโฟลเดอร์และตัวแปร ------------------
 data_dir = 'data'
@@ -44,60 +49,92 @@ print(f"ช่วงวันที่ต้องดึงข้อมูล: {
 date_list = pd.date_range(start=start_date, end=today).strftime('%d/%m/%Y')
 all_data = []
 
+
+# ------------------ ฟังก์ชันช่วยดึง ViewState ตั้งต้น ------------------
+def get_initial_tokens(session, url):
+    """ยิง GET เพื่อดึงค่า __VIEWSTATE และ __EVENTVALIDATION จากหน้าเว็บ"""
+    res = session.get(url, timeout=90)
+    if res.status_code != 200:
+        raise Exception(f"ยิง GET ไม่สำเร็จ (Status Code: {res.status_code})")
+    
+    soup = BeautifulSoup(res.text, 'html.parser')
+    vs = soup.find('input', {'name': '__VIEWSTATE'})
+    vs_gen = soup.find('input', {'name': '__VIEWSTATEGENERATOR'})
+    ev = soup.find('input', {'name': '__EVENTVALIDATION'})
+    
+    if not vs or not ev:
+        raise Exception("ไม่พบ ViewState หรือ EventValidation ในหน้าเว็บ (อาจถูกบล็อกหรือหน้าเว็บเปลี่ยนโครงสร้าง)")
+        
+    return {
+        '__VIEWSTATE': vs['value'],
+        '__VIEWSTATEGENERATOR': vs_gen['value'] if vs_gen else '',
+        '__EVENTVALIDATION': ev['value']
+    }
+
+
 # ------------------ 2. ดึงข้อมูลราคาน้ำมันจาก EPPO ------------------
 with requests.Session() as session:
-    # หากมี ScraperAPI Key ให้ตั้งค่าเป็น Standard Proxy (แก้ปัญหา Error 500)
+    # ตั้งค่า Header พื้นฐานให้เหมือนเบราว์เซอร์ทั่วไป
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'th-TH,th;q=0.9,en-US;q=0.8,en;q=0.7'
+    })
+
+    # ตั้งค่า Proxy หากมี ScraperAPI Key
     if scraper_api_key:
+        # สุ่มเลข Session เพื่อล็อกให้ GET และ POST ใช้ IP เดียวกันตลอดการทำงาน
+        session_id = random.randint(10000, 999999)
+        proxy_auth = f"scraperapi.country_code=th.session_number={session_id}:{scraper_api_key}"
         proxies = {
-            "http": f"http://scraperapi:{scraper_api_key}@proxy-server.scraperapi.com:8001",
-            "https": f"http://scraperapi:{scraper_api_key}@proxy-server.scraperapi.com:8001"
+            "http": f"http://{proxy_auth}@proxy-server.scraperapi.com:8001",
+            "https": f"http://{proxy_auth}@proxy-server.scraperapi.com:8001"
         }
         session.proxies.update(proxies)
-        # ปิดการตรวจ Verify SSL เมื่อวิ่งผ่าน Proxy
         session.verify = False
-    else:
-        session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36'
-        })
+        print(f"เปิดใช้งาน ScraperAPI Proxy (Country: TH, Session ID: {session_id})")
 
+    # 2.1 ยิง GET แค่ครั้งเดียวก่อนเข้าลูป
+    try:
+        print("กำลังเชื่อมต่อหน้าเว็บ EPPO เพื่อรับค่า Session ตั้งต้น...")
+        tokens = get_initial_tokens(session, target_url)
+        print("รับค่า ViewState สำเร็จ พร้อมดึงข้อมูลรายวัน!\n")
+    except Exception as e:
+        print(f"❌ ไม่สามารถเริ่มต้นดึงข้อมูลได้: {e}")
+        exit(1)
+
+    # 2.2 วนลูปยิงเฉพาะ POST รายวันโดยใช้ค่า ViewState เดิม
     for date_str in date_list:
         print(f"กำลังดึงและแปลงข้อมูลวันที่: {date_str}")
         try:
-            # 1. ยิง GET ตรงๆ ไปที่ URL ปลายทาง (Session จะพาผ่าน ScraperAPI Proxy อัตโนมัติ)
-            res_get = session.get(target_url, timeout=90)
-            
-            if res_get.status_code != 200:
-                print(f"  -> ยิง GET ไม่สำเร็จ (Status Code: {res_get.status_code})")
-                continue
-
-            soup = BeautifulSoup(res_get.text, 'html.parser')
-            viewstate = soup.find('input', {'name': '__VIEWSTATE'})
-            viewstate_gen = soup.find('input', {'name': '__VIEWSTATEGENERATOR'})
-            event_val = soup.find('input', {'name': '__EVENTVALIDATION'})
-
-            if not viewstate or not event_val:
-                print(f"  -> ไม่พบ ViewState/EventValidation สำหรับวันที่ {date_str}")
-                continue
-
             payload = {
                 '__EVENTTARGET': '',
                 '__EVENTARGUMENT': '',
-                '__VIEWSTATE': viewstate['value'],
-                '__VIEWSTATEGENERATOR': viewstate_gen['value'] if viewstate_gen else '',
-                '__EVENTVALIDATION': event_val['value'],
+                '__VIEWSTATE': tokens['__VIEWSTATE'],
+                '__VIEWSTATEGENERATOR': tokens['__VIEWSTATEGENERATOR'],
+                '__EVENTVALIDATION': tokens['__EVENTVALIDATION'],
                 'TbxToDate': date_str,
                 'BtnGenerate.x': '50',
                 'BtnGenerate.y': '10'
             }
 
-            # 2. ยิง POST เพื่อขอไฟล์ Excel
+            # ยิง POST เพื่อขอไฟล์ Excel
             res_post = session.post(target_url, data=payload, timeout=90)
 
-            if len(res_post.content) < 500:
-                print(f"  -> ขนาดไฟล์ Excel เล็กผิดปกติ อาจยังไม่มีข้อมูลวันที่ {date_str}")
-                continue
+            # ตรวจสอบว่าผลลัพธ์ที่ได้เป็นหน้า HTML Error หรือไฟล์เล็กผิดปกติหรือไม่
+            content_type = res_post.headers.get('Content-Type', '').lower()
+            if 'text/html' in content_type or len(res_post.content) < 500:
+                print(f"  -> ไม่ได้รับไฟล์ Excel (อาจยังไม่มีข้อมูลวันที่ {date_str} หรือ Session หมดอายุ) ลองรีเฟรช Token...")
+                # ลองดึง Token ใหม่อีกครั้งเผื่อกรณีรันหลายวันแล้ว Session หลุด
+                tokens = get_initial_tokens(session, target_url)
+                payload.update(tokens)
+                res_post = session.post(target_url, data=payload, timeout=90)
+                
+                if 'text/html' in res_post.headers.get('Content-Type', '').lower() or len(res_post.content) < 500:
+                    print(f"  -> ยืนยันว่ายังไม่มีข้อมูลสำหรับวันที่ {date_str} (ข้าม)")
+                    continue
 
-            # 3. แปลง Excel เป็น DataFrame
+            # แปลง Excel เป็น DataFrame
             df_raw = pd.read_excel(BytesIO(res_post.content), header=None)
 
             brands = df_raw.iloc[11, 1:11].fillna('').astype(str).tolist()
