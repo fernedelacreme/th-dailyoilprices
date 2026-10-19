@@ -3,7 +3,7 @@ name: Daily EPPO Scraper
 on:
   schedule:
     # 02:17 UTC = 09:17 น. เวลาไทย (เลี่ยงคิวต้นชั่วโมง)
-    - cron: '33 2 * * *'
+    - cron: '11 11 * * *'
   workflow_dispatch:
 
 permissions:
