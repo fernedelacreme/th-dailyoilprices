@@ -32,16 +32,21 @@ jobs:
       - name: Commit and push changes
         shell: powershell
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/*.parquet
+          # ค้นหาตำแหน่งไฟล์ Git ในเครื่องอัตโนมัติ
+          $gitPath = "C:\Program Files\Git\cmd\git.exe"
+          if (!(Test-Path $gitPath)) {
+              $gitPath = "$env:LocalAppData\Programs\Git\cmd\git.exe"
+          }
           
-          # เช็กว่ามีการเปลี่ยนแปลงไฟล์ไหม ก่อนจะ commit
-          $status = git status --porcelain
+          & $gitPath config --global user.name "github-actions[bot]"
+          & $gitPath config --global user.email "github-actions[bot]@users.noreply.github.com"
+          & $gitPath add data/*.parquet
+          
+          $status = & $gitPath status --porcelain
           if ($status) {
               $dateStr = Get-Date -Format "yyyy-MM-dd"
-              git commit -m "Auto-update prices $dateStr"
-              git push
+              & $gitPath commit -m "Auto-update prices $dateStr"
+              & $gitPath push
           } else {
               Write-Host "No changes to commit."
           }
