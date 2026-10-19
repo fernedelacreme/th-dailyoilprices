@@ -13,20 +13,20 @@ jobs:
   scrape-and-update:
     runs-on: self-hosted
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      # --- ลบ หรือใส่เครื่องหมาย # ปิดขั้นตอน setup-python ทิ้งไปเลย ---
+      # - name: Set up Python
+      #   uses: actions/setup-python@v5
+      #   with:
+      #     python-version: '3.11'
 
-      - name: Install Dependencies
-        run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          pip install pandas requests beautifulsoup4 pyarrow openpyxl
 
-      - name: Run Scraper
-        env:
-          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+      - name: Run scraper
         run: python scraper.py
 
       - name: Commit and Push Updated Parquet
