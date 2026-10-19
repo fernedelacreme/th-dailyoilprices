@@ -5,6 +5,12 @@ from io import BytesIO
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+import sys
+import io
+
+# บังคับให้ stdout รองรับ UTF-8 และละเว้นหรือแทนที่ตัวอักษรที่แปลงไม่ได้แทนที่จะพัง
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # ปิดคำเตือน SSL เผื่อใบรับรองเว็บราชการมีปัญหา
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
