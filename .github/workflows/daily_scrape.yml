@@ -29,12 +29,22 @@ jobs:
       - name: Run scraper
         run: python scraper.py
 
-      - name: Commit and Push Updated Parquet
+      - name: Commit and push changes
+        shell: pwsh
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add data/*.parquet
-          git diff --staged --quiet || (git commit -m "Auto-update prices $(date +'%Y-%m-%d')" && git push)
+          
+          # เช็กว่ามีการเปลี่ยนแปลงไฟล์ไหม ก่อนจะ commit
+          $status = git status --porcelain
+          if ($status) {
+              $dateStr = Get-Date -Format "yyyy-MM-dd"
+              git commit -m "Auto-update prices $dateStr"
+              git push
+          } else {
+              Write-Host "No changes to commit."
+          }
 
       # ------------------ สั่งทักหน้าเว็บ Streamlit เพื่อไม่ให้หลับ ------------------
       - name: Keep Streamlit App Awake
