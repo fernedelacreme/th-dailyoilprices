@@ -53,5 +53,10 @@ jobs:
 
       # ------------------ สั่งทักหน้าเว็บ Streamlit เพื่อไม่ให้หลับ ------------------
       - name: Keep Streamlit App Awake
+        shell: powershell
         run: |
-          curl -I -s https://th-dailyoilprices.streamlit.app || true
+          try {
+              Invoke-WebRequest -Uri "https://th-dailyoilprices.streamlit.app" -UseBasicParsing -UserAgent "Mozilla/5.0" | Out-Null
+          } catch {
+              Write-Host "Failed to wake up app"
+          }
