@@ -196,6 +196,18 @@ if st.sidebar.button("🧹 ล้างแคชและรีเฟรชห�
   st.cache_data.clear()
   st.rerun()
 
+import os
+from datetime import datetime, timedelta, timezone
+
+parquet_path = "data/EPPO_Prices_2026.parquet"
+if os.path.exists(parquet_path):
+    # ดึงเวลา modified ของไฟล์ แล้วแปลงเป็นเวลาไทย (UTC+7)
+    mod_timestamp = os.path.getmtime(parquet_path)
+    tz_th = timezone(timedelta(hours=7))
+    mod_time = datetime.fromtimestamp(mod_timestamp, tz=timezone.utc).astimezone(tz_th)
+    
+    st.sidebar.caption(f"🕒 ข้อมูลล่าสุดในไฟล์: {mod_time.strftime('%d/%m/%Y %H:%M น.')}")
+
 # ------------------ 5. ฟอร์มเลือกเดือนและปีสำหรับออกรายงาน ------------------
 month_names_th = {
     1: "มกราคม",
