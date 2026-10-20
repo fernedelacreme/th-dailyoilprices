@@ -190,22 +190,7 @@ st.sidebar.download_button(
 
 # ส่วนปุ่ม Trigger สั่งดึงข้อมูล
 st.sidebar.write("---")
-st.sidebar.subheader("🔄 สั่งดึงข้อมูลล่าสุด")
-st.sidebar.caption(
-    "กดปุ่มนี้เพื่อส่งสัญญาณให้ GitHub Actions"
-    " ดึงข้อมูลวันที่ขาดอยู่จนถึงปัจจุบันทันที"
-)
-
-if st.sidebar.button("🚀 อัปเดตข้อมูลเดี๋ยวนี้", type="secondary"):
-  success, msg = trigger_github_workflow()
-  if success:
-    st.sidebar.success(msg)
-    st.sidebar.info(
-        "💡 รอประมาณ 1–2 นาทีให้บอททำงานเสร็จ แล้วกดปุ่ม"
-        " **'ล้างแคชและรีเฟรช'** ด้านล่าง"
-    )
-  else:
-    st.sidebar.error(msg)
+st.sidebar.subheader("🔄 ตรวจสอบข้อมูลล่าสุด")
 
 if st.sidebar.button("🧹 ล้างแคชและรีเฟรชหน้าเว็บ"):
   st.cache_data.clear()
