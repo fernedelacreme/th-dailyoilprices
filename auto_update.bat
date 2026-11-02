@@ -1,17 +1,17 @@
 @echo off
 cd /d "%~dp0"
 
-:: 1. ดึงโค้ดล่าสุดจาก GitHub ลงมาก่อนเสมอ
-git pull --rebase origin main
-
-:: 2. รันสคริปต์ดึงราคาน้ำมัน
+:: 1. รันสคริปต์ดึงราคาน้ำมันเติมไฟล์ Parquet
 python scraper.py
 
-:: 3. เตรียมไฟล์ Parquet
-git add data/*.parquet
+:: 2. Stage ไฟล์ Parquet และไฟล์สคริปต์ทั้งหมดก่อน
+git add data/*.parquet scraper.py app.py
 
-:: 4. บันทึก Commit
+:: 3. Commit งานในเครื่องไว้ก่อนเสมอ
 git commit -m "Auto-update prices: %date%"
 
-:: 5. ดันไฟล์ขึ้น GitHub
+:: 4. ดึงข้อมูลล่าสุดจาก GitHub ลงมาผสาน (rebase) หลัง commit แล้ว
+git pull --rebase origin main
+
+:: 5. ดันข้อมูลขึ้น GitHub
 git push origin main
